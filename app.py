@@ -166,10 +166,10 @@ class AnalyseurFichiers:
     
     def exporter_resultats(self, resultats: Dict, format_export: str = "json"):
         """Exporte les résultats dans un fichier"""
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nom_fichier = f"analyse_texte_{timestamp}.{format_export}"
-        
         try:
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            nom_fichier = f"analyse_texte_{timestamp}.{format_export}"
+            
             if format_export == "json":
                 with open(nom_fichier, 'w', encoding='utf-8') as f:
                     json.dump(resultats, f, ensure_ascii=False, indent=2)
@@ -177,15 +177,15 @@ class AnalyseurFichiers:
                 with open(nom_fichier, 'w', encoding='utf-8') as f:
                     f.write("RAPPORT D'ANALYSE DE TEXTE\n")
                     f.write("=" * 50 + "\n\n")
-                    for fichier, analyse in resultats.items():
-                        f.write(f"FICHIER: {fichier}\n")
-                        f.write(f"Nombre de mots: {analyse['statistiques']['nombre_mots']}\n")
-                        f.write(f"Complexité: {analyse['complexite']['niveau_complexite']}\n\n")
+                    if "statistiques" in resultats:
+                        stats = resultats["statistiques"]
+                        f.write(f"Nombre de mots: {stats.get('nombre_mots', 'N/A')}\n")
+                        f.write(f"Nombre de lignes: {stats.get('nombre_lignes', 'N/A')}\n")
+                        f.write(f"Nombre de phrases: {stats.get('nombre_phrases', 'N/A')}\n")
             
-            return f"✅ Résultats exportés: {nom_fichier}"
+            return f"✅ Fichier exporté: {nom_fichier}"
         except Exception as e:
             return f"❌ Erreur lors de l'export: {e}"
-
 # =============================================================================
 # CLASSES AMÉLIORÉES POUR STREAMLIT
 # =============================================================================
