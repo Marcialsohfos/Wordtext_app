@@ -565,43 +565,47 @@ def afficher_nuage_mots_fichier(analyseur_ameliore, texte):
 def exporter_resultats_avances(analyseur, resultats):
     st.subheader("📤 Exporter les Résultats")
     
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        format_export = st.selectbox("Format d'export", ["json", "txt", "csv"])
-        nom_fichier = st.text_input("Nom du fichier", value=f"analyse_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
-    
-    with col2:
-        st.write("### Options d'export")
-        inclure_stats = st.checkbox("Inclure les statistiques", value=True)
-        inclure_mots_cles = st.checkbox("Inclure les mots-clés", value=True)
-        inclure_complexite = st.checkbox("Inclure l'analyse de complexité", value=True)
+    # Format d'export simplifié
+    format_export = st.selectbox("Choisissez le format d'export", ["json", "txt"])
     
     if st.button("🚀 Générer l'export", type="primary"):
-        with st.spinner("Génération de l'export en cours..."):
+        with st.spinner("Création du fichier d'export..."):
             try:
-                # Utiliser la méthode d'export existante de la classe AnalyseurFichiers
-                message_export = analyseur.exporter_resultats(resultats, format_export)
-                st.success(message_export)
-                
-                # Afficher un aperçu des données exportées
-                with st.expander("👁️ Aperçu des données exportées"):
+                # Appel direct à la méthode d'export
+                if hasattr(analyseur, 'exporter_resultats'):
+                    message = analyseur.exporter_resultats(resultats, format_export)
+                    st.success(message)
+                else:
+                    # Fallback si la méthode n'existe pas
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    nom_fichier = f"analyse_texte_{timestamp}.{format_export}"
+                    
                     if format_export == "json":
-                        st.json(resultats)
-                    else:
-                        st.write("**Résumé des données:**")
-                        if isinstance(resultats, dict):
-                            for key, value in resultats.items():
-                                if key == "statistiques":
-                                    st.write(f"**{key}:**")
-                                    for stat, val in value.items():
-                                        st.write(f"  - {stat}: {val}")
-                        else:
-                            st.write(resultats)
-                            
+                        with open(nom_fichier, 'w', encoding='utf-8') as f:
+                            json.dump(resultats, f, ensure_ascii=False, indent=2)
+                    elif format_export == "txt":
+                        with open(nom_fichier, 'w', encoding='utf-8') as f:
+                            f.write("RAPPORT D'ANALYSE DE TEXTE\n")
+                            f.write("=" * 50 + "\n\n")
+                            if "statistiques" in resultats:
+                                stats = resultats["statistiques"]
+                                f.write(f"Nombre de mots: {stats.get('nombre_mots', 'N/A')}\n")
+                                f.write(f"Nombre de lignes: {stats.get('nombre_lignes', 'N/A')}\n")
+                                f.write(f"Nombre de phrases: {stats.get('nombre_phrases', 'N/A')}\n")
+                    
+                    st.success(f"✅ Fichier exporté: {nom_fichier}")
+                    
             except Exception as e:
                 st.error(f"❌ Erreur lors de l'export: {str(e)}")
-                st.info("💡 Essayez un autre format d'export ou vérifiez les données")
+    
+    # Aperçu des données
+    with st.expander("👁️ Aperçu des données à exporter"):
+        st.write("**Données disponibles pour l'export:**")
+        if isinstance(resultats, dict):
+            for key in resultats.keys():
+                st.write(f"• {key}")
+        st.json(resultats if isinstance(resultats, dict) else {"data": resultats})
+        
 def analyser_dossier(analyseur):
     st.header("📁 Analyse de Dossier")
     
