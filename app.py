@@ -12,38 +12,183 @@ import plotly.express as px
 import plotly.graph_objects as go
 from collections import Counter
 import numpy as np
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 
-# Configuration de la page
-st.set_page_config(
-    page_title="Wordtextapp - Analyseur de Texte Avancé",
-    page_icon="📊",
-    layout="wide",
-    initial_sidebar_state="expanded"
-)
+# =============================================================================
+# CLASSES D'ANALYSE (intégrées directement)
+# =============================================================================
 
-# Style CSS personnalisé
-st.markdown("""
-<style>
-    .main-header {
-        font-size: 2.5rem;
-        color: #1f77b4;
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    .metric-card {
-        background-color: #f0f2f6;
-        padding: 1rem;
-        border-radius: 10px;
-        border-left: 4px solid #1f77b4;
-    }
-    .word-cloud-container {
-        background-color: white;
-        padding: 2rem;
-        border-radius: 10px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-    }
-</style>
-""", unsafe_allow_html=True)
+class AnalyseurTexte:
+    """Classe pour analyser le contenu textuel"""
+    
+    @staticmethod
+    def analyser_texte(texte: str) -> Dict:
+        """Analyse complète d'un texte"""
+        if not texte.strip():
+            return {"erreur": "Fichier vide"}
+        
+        mots = texte.split()
+        lignes = texte.split('\n')
+        phrases = texte.split('.')
+        
+        return {
+            "statistiques": {
+                "caracteres_total": len(texte),
+                "caracteres_sans_espaces": len(texte.replace(" ", "")),
+                "nombre_mots": len(mots),
+                "nombre_lignes": len(lignes),
+                "nombre_phrases": len([p for p in phrases if p.strip()]),
+                "mots_par_ligne": round(len(mots) / max(len(lignes), 1), 2),
+                "mots_par_phrase": round(len(mots) / max(len([p for p in phrases if p.strip()]), 1), 2)
+            },
+            "mots_cles": AnalyseurTexte._extraire_mots_cles(mots),
+            "complexite": AnalyseurTexte._analyser_complexite(texte, mots)
+        }
+    
+    @staticmethod
+    def _extraire_mots_cles(mots: List[str], top_n: int = 10) -> List[str]:
+        """Extrait les mots les plus fréquents"""
+        from collections import Counter
+        
+        # Filtrer les mots courts et communs
+        mots_filtres = [mot.lower() for mot in mots if len(mot) > 3]
+        mots_communs = {'dans', 'avec', 'pour', 'dont', 'cette', 'comme', 'plus', 'tout', 'fait', 'sont'}
+        mots_filtres = [mot for mot in mots_filtres if mot not in mots_communs]
+        
+        compteur = Counter(mots_filtres)
+        return [mot for mot, count in compteur.most_common(top_n)]
+    
+    @staticmethod
+    def _analyser_complexite(texte: str, mots: List[str]) -> Dict:
+        """Analyse la complexité du texte"""
+        mots_longues = [mot for mot in mots if len(mot) > 8]
+        pourcentage_mots_longues = (len(mots_longues) / max(len(mots), 1)) * 100
+        
+        return {
+            "niveau_complexite": "Élevé" if pourcentage_mots_longues > 15 else "Moyen" if pourcentage_mots_longues > 8 else "Simple",
+            "pourcentage_mots_complexes": round(pourcentage_mots_longues, 2),
+            "score_lisibilite": round(max(0, 100 - pourcentage_mots_longues * 2), 2)
+        }
+
+class GestionnaireFichiers:
+    """Classe pour gérer les opérations sur les fichiers"""
+    
+    @staticmethod
+    def formats_supportes() -> List[str]:
+        return ["*.txt", "*.md", "*.csv", "*.log"]
+    
+    @staticmethod
+    def detecter_encodage(chemin_fichier: str) -> str:
+        """Tente de détecter l'encodage du fichier"""
+        encodages = ['utf-8', 'latin-1', 'windows-1252', 'iso-8859-1']
+        
+        for enc in encodages:
+            try:
+                with open(chemin_fichier, 'r', encoding=enc) as f:
+                    f.read()
+                return enc
+            except UnicodeDecodeError:
+                continue
+        
+        return 'utf-8'  # encodage par défaut
+
+class AnalyseurFichiers:
+    def __init__(self):
+        self.analyseur = AnalyseurTexte()
+        self.gestionnaire = GestionnaireFichiers()
+        self.historique = []
+    
+    def analyser_fichier(self, chemin_fichier: str, afficher_details: bool = True) -> Optional[Dict]:
+        """Analyse un fichier texte avec gestion d'erreurs améliorée"""
+        try:
+            if not os.path.exists(chemin_fichier):
+                return {"erreur": f"Fichier non trouvé: {chemin_fichier}"}
+            
+            # Vérifier la taille du fichier
+            taille = os.path.getsize(chemin_fichier)
+            if taille > 10 * 1024 * 1024:  # 10MB
+                return {"erreur": f"Fichier trop volumineux ({taille/1024/1024:.2f} MB)"}
+            
+            # Détection automatique de l'encodage
+            encodage = self.gestionnaire.detecter_encodage(chemin_fichier)
+            
+            with open(chemin_fichier, 'r', encoding=encodage) as f:
+                texte = f.read()
+            
+            resultats = self.analyseur.analyser_texte(texte)
+            
+            # Sauvegarder dans l'historique
+            self._ajouter_historique(chemin_fichier, resultats)
+            
+            return resultats
+            
+        except PermissionError:
+            return {"erreur": f"Permission refusée: {chemin_fichier}"}
+        except Exception as e:
+            return {"erreur": f"Erreur lors de l'analyse: {str(e)}"}
+    
+    def analyser_dossier(self, chemin_dossier: str, extension: str = "*.txt", 
+                        recursif: bool = False) -> Dict[str, Dict]:
+        """Analyse tous les fichiers d'un dossier avec options avancées"""
+        if not os.path.exists(chemin_dossier):
+            return {}
+        
+        if recursif:
+            pattern = os.path.join(chemin_dossier, "**", extension)
+        else:
+            pattern = os.path.join(chemin_dossier, extension)
+        
+        fichiers = glob.glob(pattern, recursive=recursif)
+        fichiers = [f for f in fichiers if os.path.isfile(f)]
+        
+        if not fichiers:
+            return {}
+        
+        resultats_totaux = {}
+        
+        for i, fichier in enumerate(fichiers):
+            resultats = self.analyser_fichier(fichier, afficher_details=False)
+            if resultats and "erreur" not in resultats:
+                nom_fichier = os.path.basename(fichier)
+                resultats_totaux[nom_fichier] = resultats
+        
+        return resultats_totaux
+    
+    def _ajouter_historique(self, chemin_fichier: str, resultats: Dict):
+        """Ajoute une analyse à l'historique"""
+        entree = {
+            "timestamp": datetime.now().isoformat(),
+            "fichier": chemin_fichier,
+            "resultats": resultats
+        }
+        self.historique.append(entree)
+    
+    def exporter_resultats(self, resultats: Dict, format_export: str = "json"):
+        """Exporte les résultats dans un fichier"""
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        nom_fichier = f"analyse_texte_{timestamp}.{format_export}"
+        
+        try:
+            if format_export == "json":
+                with open(nom_fichier, 'w', encoding='utf-8') as f:
+                    json.dump(resultats, f, ensure_ascii=False, indent=2)
+            elif format_export == "txt":
+                with open(nom_fichier, 'w', encoding='utf-8') as f:
+                    f.write("RAPPORT D'ANALYSE DE TEXTE\n")
+                    f.write("=" * 50 + "\n\n")
+                    for fichier, analyse in resultats.items():
+                        f.write(f"FICHIER: {fichier}\n")
+                        f.write(f"Nombre de mots: {analyse['statistiques']['nombre_mots']}\n")
+                        f.write(f"Complexité: {analyse['complexite']['niveau_complexite']}\n\n")
+            
+            return f"✅ Résultats exportés: {nom_fichier}"
+        except Exception as e:
+            return f"❌ Erreur lors de l'export: {e}"
+
+# =============================================================================
+# CLASSES AMÉLIORÉES POUR STREAMLIT
+# =============================================================================
 
 class AnalyseurTexteAmeliore:
     """Classe améliorée pour l'analyse textuelle avec nuage de mots"""
@@ -98,6 +243,46 @@ class AnalyseurTexteAmeliore:
             sentiment = "Neutre"
             
         return sentiment, round(score, 2)
+
+# =============================================================================
+# APPLICATION STREAMLIT
+# =============================================================================
+
+# Configuration de la page
+st.set_page_config(
+    page_title="Wordtextapp - Analyseur de Texte Avancé",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# Style CSS personnalisé
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        color: #1f77b4;
+        text-align: center;
+        margin-bottom: 2rem;
+    }
+    .metric-card {
+        background-color: #f0f2f6;
+        padding: 1rem;
+        border-radius: 10px;
+        border-left: 4px solid #1f77b4;
+    }
+    .word-cloud-container {
+        background-color: white;
+        padding: 2rem;
+        border-radius: 10px;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+</style>
+<html>
+<p>Power by Lab_mat and RMT</>
+</html>
+
+""", unsafe_allow_html=True)
 
 def main():
     st.markdown('<h1 class="main-header">🔍 Wordtextapp - Analyseur de Texte Avancé</h1>', unsafe_allow_html=True)
@@ -166,9 +351,6 @@ def afficher_accueil():
         """)
     
     with col2:
-        st.image("https://via.placeholder.com/300x200/1f77b4/ffffff?text=Wordtextapp", 
-                caption="Analyse de texte intelligente", use_column_width=True)
-        
         st.markdown("### 📈 Stats globales")
         st.metric("Formats supportés", "4")
         st.metric("Fonctionnalités", "8+")
@@ -179,8 +361,8 @@ def analyser_fichier(analyseur, analyseur_ameliore):
     
     uploaded_file = st.file_uploader(
         "Choisissez un fichier à analyser",
-        type=['txt', 'md', 'csv', 'log', 'pdf'],
-        help="Formats supportés: TXT, MD, CSV, LOG, PDF"
+        type=['txt', 'md', 'csv', 'log'],
+        help="Formats supportés: TXT, MD, CSV, LOG"
     )
     
     if uploaded_file is not None:
@@ -213,9 +395,15 @@ def analyser_fichier(analyseur, analyseur_ameliore):
                 }
                 st.session_state.historique_analyses.append(entree_historique)
                 
-                afficher_resultats_detailles_ameliore(resultats, analyseur_ameliore, tmp_path)
+                # Lire le texte pour les analyses avancées
+                with open(tmp_path, 'r', encoding='utf-8') as f:
+                    texte_complet = f.read()
+                
+                afficher_resultats_detailles_ameliore(resultats, analyseur_ameliore, texte_complet)
             else:
                 st.error("❌ Erreur lors de l'analyse du fichier")
+                if resultats and "erreur" in resultats:
+                    st.error(f"Détails: {resultats['erreur']}")
                 
         finally:
             os.unlink(tmp_path)
@@ -265,12 +453,8 @@ def afficher_nuage_mots(analyseur_ameliore):
             else:
                 st.warning("⚠️ Texte trop court ou pas assez de mots significatifs pour générer un nuage de mots.")
 
-def afficher_resultats_detailles_ameliore(resultats, analyseur_ameliore, chemin_fichier):
+def afficher_resultats_detailles_ameliore(resultats, analyseur_ameliore, texte_complet):
     st.header("📊 Résultats Détaillés de l'Analyse")
-    
-    # Lire le texte pour l'analyse des sentiments
-    with open(chemin_fichier, 'r', encoding='utf-8') as f:
-        texte_complet = f.read()
     
     # Analyse des sentiments
     sentiment, score_sentiment = analyseur_ameliore.analyser_sentiments_basique(texte_complet)
@@ -395,7 +579,7 @@ def exporter_resultats_avances(analyseur, resultats):
     
     if st.button("🚀 Générer l'export", type="primary"):
         with st.spinner("Génération de l'export en cours..."):
-            # Simulation d'export - à adapter avec votre logique réelle
+            # Simulation d'export
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             nom_complet = f"{nom_fichier}.{format_export.lower()}"
             
@@ -435,7 +619,8 @@ def analyser_dossier(analyseur):
                 
                 # Option d'export
                 if st.button("📤 Exporter tous les résultats"):
-                    exporter_resultats(analyseur, resultats)
+                    resultat_export = analyseur.exporter_resultats(resultats, "json")
+                    st.success(resultat_export)
             else:
                 st.warning("⚠️ Aucun fichier trouvé ou analysable dans le dossier spécifié")
         else:
@@ -507,7 +692,6 @@ def afficher_formats_ameliore():
         - **.md** - Fichiers Markdown
         - **.csv** - Fichiers CSV (analyse textuelle)
         - **.log** - Fichiers de log
-        - **.pdf** - Fichiers PDF (bientôt disponible)
         """)
         
         st.subheader("🎯 Métriques d'Analyse")
@@ -540,16 +724,6 @@ def afficher_formats_ameliore():
     
     st.markdown("---")
     st.success("🚀 **Nouveautés** : Nuage de mots et analyse de sentiments maintenant disponibles!")
-
-def exporter_resultats(analyseur, resultats):
-    format_export = st.selectbox("Format d'export", ["json", "txt", "csv"])
-    
-    if st.button("📥 Télécharger l'export"):
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        nom_fichier = f"analyse_globale_{timestamp}.{format_export}"
-        
-        analyseur.exporter_resultats(resultats, format_export)
-        st.success(f"✅ Export généré: {nom_fichier}")
 
 if __name__ == "__main__":
     main()
