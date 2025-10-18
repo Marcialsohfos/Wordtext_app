@@ -486,8 +486,8 @@ def afficher_resultats_detailles_ameliore(resultats, analyseur_ameliore, texte_c
         st.metric("📈 Score sentiment", f"{score_sentiment}%")
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Onglets pour organiser les résultats
-    tab1, tab2, tab3, tab4 = st.tabs(["📈 Statistiques", "🔑 Mots-clés", "☁️ Nuage de Mots", "📋 Export"])
+    # ONGLETS CORRIGÉS - 3 onglets seulement
+    tab1, tab2, tab3 = st.tabs(["📈 Statistiques", "🔑 Mots-clés", "☁️ Nuage de Mots"])
     
     with tab1:
         afficher_statistiques_detaillees(resultats)
@@ -498,8 +498,55 @@ def afficher_resultats_detailles_ameliore(resultats, analyseur_ameliore, texte_c
     with tab3:
         afficher_nuage_mots_fichier(analyseur_ameliore, texte_complet)
     
-    with tab4:
-        exporter_resultats_avances(analyseur, resultats)
+    # SECTION EXPORT SIMPLIFIÉE (en dehors des onglets)
+    st.markdown("---")
+    st.subheader("📤 Exporter les Résultats")
+    
+    col_export1, col_export2 = st.columns([1, 2])
+    
+    with col_export1:
+        format_export = st.selectbox("Format", ["json", "txt"])
+        if st.button("💾 Télécharger l'export", type="primary"):
+            with st.spinner("Génération du fichier..."):
+                try:
+                    # Création manuelle de l'export
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    nom_fichier = f"wordtextapp_export_{timestamp}.{format_export}"
+                    
+                    if format_export == "json":
+                        import json
+                        json_data = json.dumps(resultats, ensure_ascii=False, indent=2)
+                        st.download_button(
+                            label="📥 Télécharger JSON",
+                            data=json_data,
+                            file_name=nom_fichier,
+                            mime="application/json"
+                        )
+                    else:
+                        # Format texte
+                        texte_export = f"RAPPORT WORDTEXTAPP\n{'='*40}\n\n"
+                        if "statistiques" in resultats:
+                            stats = resultats["statistiques"]
+                            texte_export += f"Mots: {stats.get('nombre_mots', 'N/A')}\n"
+                            texte_export += f"Lignes: {stats.get('nombre_lignes', 'N/A')}\n"
+                            texte_export += f"Phrases: {stats.get('nombre_phrases', 'N/A')}\n"
+                            texte_export += f"Caractères: {stats.get('caracteres_total', 'N/A')}\n"
+                        
+                        st.download_button(
+                            label="📥 Télécharger TXT",
+                            data=texte_export,
+                            file_name=nom_fichier,
+                            mime="text/plain"
+                        )
+                        
+                    st.success("✅ Export prêt au téléchargement !")
+                    
+                except Exception as e:
+                    st.error(f"❌ Erreur: {str(e)}")
+    
+    with col_export2:
+        with st.expander("📋 Aperçu des données exportables"):
+            st.json(resultats)
 
 def afficher_statistiques_detaillees(resultats):
     col1, col2 = st.columns(2)
