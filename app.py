@@ -568,7 +568,7 @@ def exporter_resultats_avances(analyseur, resultats):
     col1, col2 = st.columns(2)
     
     with col1:
-        format_export = st.selectbox("Format d'export", ["JSON", "CSV", "TXT", "HTML"])
+        format_export = st.selectbox("Format d'export", ["json", "txt", "csv"])
         nom_fichier = st.text_input("Nom du fichier", value=f"analyse_{datetime.now().strftime('%Y%m%d_%H%M%S')}")
     
     with col2:
@@ -579,13 +579,29 @@ def exporter_resultats_avances(analyseur, resultats):
     
     if st.button("🚀 Générer l'export", type="primary"):
         with st.spinner("Génération de l'export en cours..."):
-            # Simulation d'export
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            nom_complet = f"{nom_fichier}.{format_export.lower()}"
-            
-            st.success(f"✅ Export généré avec succès: **{nom_complet}**")
-            st.info("💡 Fonctionnalité d'export à implémenter avec votre logique existante")
-
+            try:
+                # Utiliser la méthode d'export existante de la classe AnalyseurFichiers
+                message_export = analyseur.exporter_resultats(resultats, format_export)
+                st.success(message_export)
+                
+                # Afficher un aperçu des données exportées
+                with st.expander("👁️ Aperçu des données exportées"):
+                    if format_export == "json":
+                        st.json(resultats)
+                    else:
+                        st.write("**Résumé des données:**")
+                        if isinstance(resultats, dict):
+                            for key, value in resultats.items():
+                                if key == "statistiques":
+                                    st.write(f"**{key}:**")
+                                    for stat, val in value.items():
+                                        st.write(f"  - {stat}: {val}")
+                        else:
+                            st.write(resultats)
+                            
+            except Exception as e:
+                st.error(f"❌ Erreur lors de l'export: {str(e)}")
+                st.info("💡 Essayez un autre format d'export ou vérifiez les données")
 def analyser_dossier(analyseur):
     st.header("📁 Analyse de Dossier")
     
